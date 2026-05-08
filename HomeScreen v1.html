@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vara · HomeScreen — two directions</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400;1,500&family=Outfit:wght@200;300;400;500&display=swap" rel="stylesheet" />
+
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; background: #f0eee9; font-family: 'Outfit', sans-serif; -webkit-font-smoothing: antialiased; }
+  *, *::before, *::after { box-sizing: border-box; }
+
+  @keyframes varaPulse {
+    0%, 100% { transform: scale(1); box-shadow: 0 0 36px var(--fp-soft, rgba(255,255,255,0.2)); }
+    50%      { transform: scale(1.03); box-shadow: 0 0 60px var(--fp-soft, rgba(255,255,255,0.35)); }
+  }
+  @keyframes varaFadeUp {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes varaBreathe {
+    0%, 100% { transform: scale(1); opacity: 0.7; }
+    50% { transform: scale(1.12); opacity: 1; }
+  }
+  /* scrollbar hidden in artboards */
+  .vara-scroll::-webkit-scrollbar { display: none; }
+  .vara-scroll { scrollbar-width: none; }
+
+  /* Tweaks panel */
+  .tweaks {
+    position: fixed; right: 20px; bottom: 20px; z-index: 999;
+    background: rgba(22,20,18,0.88); color: #f4f0ea;
+    border: 0.5px solid rgba(255,255,255,0.14);
+    border-radius: 16px; padding: 16px 18px;
+    backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+    font-family: 'Outfit', sans-serif; font-size: 12px;
+    min-width: 240px; max-width: 280px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+    display: none;
+  }
+  .tweaks.on { display: block; }
+  .tweaks h4 {
+    margin: 0 0 12px; font-weight: 400; font-size: 11px;
+    letter-spacing: 0.28em; text-transform: uppercase; opacity: 0.7;
+  }
+  .tweaks .row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .tweaks label { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; opacity: 0.55; margin-bottom: 6px; display: block; }
+  .tweaks .seg { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+  .tweaks .seg button {
+    background: rgba(255,255,255,0.06); color: inherit;
+    border: 0.5px solid rgba(255,255,255,0.1);
+    padding: 8px 4px; border-radius: 8px; cursor: pointer;
+    font-family: inherit; font-size: 10px; letter-spacing: 0.04em;
+    transition: all 0.2s;
+  }
+  .tweaks .seg button:hover { background: rgba(255,255,255,0.12); }
+  .tweaks .seg button.active { background: rgba(255,255,255,0.22); border-color: rgba(255,255,255,0.3); }
+</style>
+
+<!-- React + Babel (pinned) -->
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="lib/ios-frame.jsx"></script>
+<script type="text/babel" src="lib/design-canvas.jsx"></script>
+<script type="text/babel" src="components/shared.jsx"></script>
+<script type="text/babel" src="components/HomeA.jsx"></script>
+<script type="text/babel" src="components/HomeB.jsx"></script>
+</head>
+<body>
+<div id="root"></div>
+
+<div class="tweaks" id="tweaks-panel">
+  <h4>Tweaks</h4>
+  <label>Time of day</label>
+  <div class="seg" id="tweak-sky"></div>
+</div>
+
+<script type="text/babel" data-presets="react">
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "sky": "deepNight"
+}/*EDITMODE-END*/;
+
+const SKY_LABELS = {
+  deepNight: 'Deep Night', sunrise: 'Sunrise', morning: 'Morning', goldenNoon: 'Noon',
+  afternoon: 'Afternoon', goldenHour: 'Golden', dusk: 'Dusk', night: 'Night',
+};
+
+function App() {
+  const [skyId, setSkyId] = React.useState(() => {
+    try { return localStorage.getItem('vara.sky') || TWEAK_DEFAULTS.sky; } catch { return TWEAK_DEFAULTS.sky; }
+  });
+  React.useEffect(() => { try { localStorage.setItem('vara.sky', skyId); } catch {} }, [skyId]);
+
+  // Expose setSky globally for Tweaks panel
+  React.useEffect(() => {
+    window.__setSky = setSkyId;
+    window.__getSky = () => skyId;
+    // rebuild tweaks segment active state
+    const seg = document.getElementById('tweak-sky');
+    if (seg) {
+      [...seg.querySelectorAll('button')].forEach(b => {
+        b.classList.toggle('active', b.dataset.id === skyId);
+      });
+    }
+  }, [skyId]);
+
+  const sky = window.SKY[skyId] || window.SKY.morning;
+
+  const onOpenPractice = (ex) => {
+    console.log('open practice', ex?.id);
+  };
+
+  return (
+    <DesignCanvas>
+      <div style={{
+        display: 'flex', gap: 96, padding: '120px 120px',
+        alignItems: 'flex-start',
+      }}>
+        {/* Variation A */}
+        <div>
+          <div style={{
+            fontFamily: "'Cormorant Garamond', serif", fontStyle: 'italic',
+            fontSize: 28, fontWeight: 400, color: 'rgba(40,30,20,0.88)',
+            marginBottom: 4,
+          }}>Variation A — Atmospheric</div>
+          <div style={{
+            fontSize: 11, letterSpacing: '0.24em', textTransform: 'uppercase',
+            color: 'rgba(60,50,40,0.55)', marginBottom: 18, fontWeight: 300,
+          }}>Photo-forward · time-aware · felt-first</div>
+
+          <IOSDevice width={402} height={874} dark={sky.dark}>
+            <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+              <HomeA sky={sky} onOpenPractice={onOpenPractice} />
+            </div>
+          </IOSDevice>
+
+          <DCPostIt top={null} left={0} rotate={-2} width={240} bottom={-120}>
+            practice cards carry the photo —<br/>
+            the sky decides which image.
+          </DCPostIt>
+        </div>
+
+        {/* Variation B */}
+        <div>
+          <div style={{
+            fontFamily: "'Cormorant Garamond', serif", fontStyle: 'italic',
+            fontSize: 28, fontWeight: 400, color: 'rgba(40,30,20,0.88)',
+            marginBottom: 4,
+          }}>Variation B — Luminous</div>
+          <div style={{
+            fontSize: 11, letterSpacing: '0.24em', textTransform: 'uppercase',
+            color: 'rgba(60,50,40,0.55)', marginBottom: 18, fontWeight: 300,
+          }}>Gradient as weather · typographic · ritual scan</div>
+
+          <IOSDevice width={402} height={874} dark={sky.dark}>
+            <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+              <HomeB sky={sky} onOpenPractice={onOpenPractice} />
+            </div>
+          </IOSDevice>
+
+          <DCPostIt top={null} left={0} rotate={1.5} width={260} bottom={-140}>
+            photo is blurred into color —<br/>
+            the day-arc is typographic.<br/>
+            try switching time of day →
+          </DCPostIt>
+        </div>
+
+        {/* canvas title */}
+        <div style={{
+          position: 'absolute', top: 36, left: 120,
+          fontFamily: "'Cormorant Garamond', serif", fontStyle: 'italic',
+          fontSize: 44, fontWeight: 400, color: 'rgba(40,30,20,0.92)',
+        }}>
+          Vara · HomeScreen
+          <div style={{
+            fontFamily: 'Outfit', fontStyle: 'normal', fontSize: 11,
+            fontWeight: 300, letterSpacing: '0.28em', textTransform: 'uppercase',
+            color: 'rgba(60,50,40,0.55)', marginTop: 8,
+          }}>Two directions · dreamy photography · same content</div>
+        </div>
+      </div>
+    </DesignCanvas>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+
+// ── Tweaks wiring ──────────────────────────────────────────
+const SKY_IDS = ['sunrise','morning','goldenNoon','afternoon','goldenHour','dusk','night','deepNight'];
+const seg = document.getElementById('tweak-sky');
+seg.innerHTML = SKY_IDS.map(id => `<button data-id="${id}">${SKY_LABELS[id]}</button>`).join('');
+seg.addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  const id = b.dataset.id;
+  if (window.__setSky) window.__setSky(id);
+  window.parent.postMessage({ type: '__edit_mode_set_keys', edits: { sky: id } }, '*');
+});
+
+window.addEventListener('message', (e) => {
+  const d = e.data || {};
+  if (d.type === '__activate_edit_mode') document.getElementById('tweaks-panel').classList.add('on');
+  if (d.type === '__deactivate_edit_mode') document.getElementById('tweaks-panel').classList.remove('on');
+});
+window.parent.postMessage({ type: '__edit_mode_available' }, '*');
+</script>
+</body>
+</html>
